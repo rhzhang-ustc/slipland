@@ -15,6 +15,80 @@ html, body {
   -webkit-user-select: none;
 }
 
+#instructionsOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(26, 26, 46, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  transition: opacity 0.3s ease;
+}
+#instructionsOverlay.hidden {
+  pointer-events: none;
+  opacity: 0;
+}
+#instructionsModal {
+  background: #16213e;
+  border-radius: 16px;
+  padding: 1.75rem;
+  max-width: 420px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(78, 205, 196, 0.3);
+}
+#instructionsModal h2 {
+  color: #4ecdc4;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+#instructionsModal h3 {
+  color: #e8e8e8;
+  font-size: 1rem;
+  margin: 1rem 0 0.5rem;
+}
+#instructionsModal h3:first-of-type {
+  margin-top: 0;
+}
+.instructions-content {
+  color: #b8c5d6;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.instructions-content p {
+  margin: 0.5rem 0;
+}
+.instructions-content ul {
+  margin: 0.5rem 0 0.75rem 1.25rem;
+}
+.instructions-content li {
+  margin-bottom: 0.4rem;
+}
+#instructionsPlayBtn {
+  display: block;
+  width: 100%;
+  margin-top: 1.25rem;
+  padding: 0.85rem 1.5rem;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #1a1a2e;
+  background: #4ecdc4;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+#instructionsPlayBtn:hover {
+  background: #5fd9d0;
+}
+#instructionsPlayBtn:active {
+  transform: scale(0.98);
+}
+
 #playOverlay {
   position: fixed;
   inset: 0;

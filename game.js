@@ -301,6 +301,7 @@ function screenToWorld(screenX, screenY) {
 
 function handlePointerDown(e) {
   if (gameOver) return;
+  if (!instructionsDismissed) return;
   e.preventDefault();
   unlockAudio();
   initAudio();
@@ -322,7 +323,7 @@ function handlePointerUp(e) {
   if (!isPointerDown) return;
   isPointerDown = false;
 
-  if (gameOver) return;
+  if (gameOver || !instructionsDismissed) return;
   if (!figure.grounded && !figure.teeterState) return;
 
   if (currentLandIndex === 0) trackEvent('game_start');
@@ -837,6 +838,8 @@ function handleResize() {
   WORLD_WIDTH = Math.max(WORLD_HEIGHT * aspect, WORLD_HEIGHT * minAspect);
 }
 
+let instructionsDismissed = false;
+
 function setupInput() {
   canvas.addEventListener('pointerdown', handlePointerDown, {
     passive: false,
@@ -853,6 +856,16 @@ function setupInput() {
       initGame();
     }
   });
+
+  const playBtn = document.getElementById('instructionsPlayBtn');
+  const overlay = document.getElementById('instructionsOverlay');
+  if (playBtn && overlay) {
+    playBtn.addEventListener('click', () => {
+      overlay.classList.add('hidden');
+      instructionsDismissed = true;
+      unlockAudio();
+    });
+  }
 }
 
 function updatePlayOverlay() {

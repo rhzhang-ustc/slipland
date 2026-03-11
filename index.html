@@ -18,6 +18,26 @@
   </script>
 </head>
 <body>
+  <div id="instructionsOverlay">
+    <div id="instructionsModal">
+      <h2>How to Play</h2>
+      <div class="instructions-content">
+        <h3>Controls</h3>
+        <p><strong>Press and hold</strong> to charge your jump, then <strong>release</strong> to launch. Longer hold = longer jump. You can only jump rightward.</p>
+        <p><strong>Teetering?</strong> When you land near the edge (figure turns red), <strong>tap quickly</strong> to save yourself!</p>
+
+        <h3>Physical Properties & Movement</h3>
+        <p>Each platform has different <strong>friction</strong>. This affects how much you slide after landing:</p>
+        <ul>
+          <li><strong>Low friction</strong> (ice, metal): Slippery! You slide more—land with care or you may skid off the edge.</li>
+          <li><strong>High friction</strong> (rubber, sandpaper): Grippy and forgiving. Less sliding, safer landings.</li>
+          <li><strong>Medium friction</strong> (wood, plastic): Somewhere in between.</li>
+        </ul>
+        <p><strong>Land too fast</strong> and you'll skid. Land gently (low horizontal speed) for a safe stop and build a streak. Watch your figure's color: teal = stable, orange = slipping, red = sliding or teetering!</p>
+      </div>
+      <button id="instructionsPlayBtn">Play</button>
+    </div>
+  </div>
   <div id="playOverlay" class="hidden">
     <div id="rotateMessage">
       <div id="rotateIcon">📱</div>
