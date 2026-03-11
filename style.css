@@ -15,42 +15,37 @@ html, body {
   -webkit-user-select: none;
 }
 
-#rotateOverlay {
+#playOverlay {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: #1a1a2e;
+  background: rgba(26, 26, 46, 0.95);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
   transition: opacity 0.3s ease;
 }
-#rotateOverlay.hidden {
+#playOverlay.hidden {
   pointer-events: none;
   opacity: 0;
 }
-#rotateContent {
-  text-align: center;
-  color: #fff;
-}
-#rotateIcon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-  animation: rotateHint 2s ease-in-out infinite;
-}
-@keyframes rotateHint {
-  0%, 100% { transform: rotate(-90deg); }
-  50% { transform: rotate(-60deg); }
-}
-#rotateContent p {
+#playBtn {
+  padding: 16px 48px;
   font-size: 1.25rem;
-  font-family: sans-serif;
+  font-weight: bold;
+  color: #fff;
+  background: #4ecdc4;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
-#rotateContent .rotateSub {
-  font-size: 0.9rem;
-  color: #a0a0a0;
-  margin-top: 0.5rem;
+#playBtn:hover {
+  background: #5dd9d0;
+}
+#playBtn:active {
+  transform: scale(0.98);
 }
 
 #gameCanvas {
