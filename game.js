@@ -29,6 +29,9 @@ const MATERIALS = {
 };
 const MATERIAL_NAMES = Object.keys(MATERIALS);
 const MATERIAL_HINTS = { ice: 'Slippery!', rubber: 'Stable!' };
+
+// World record: set to your Firebase Realtime Database URL (e.g. https://PROJECT-default-rtdb.firebaseio.com) for live sync
+const FIREBASE_DB_URL = '';
 const HINT_DISPLAY_MS = 1800;
 
 // Audio - material-specific landing sounds. iOS Safari doesn't support OGG; use MP3 fallbacks.
@@ -172,6 +175,8 @@ let animationId = null;
 let cameraX = 0;
 let currentLandIndex = 0;
 let bestLands = 0;
+let personalRecord = 0;
+let worldRecord = null;
 let consecutiveSafeLandings = 0;
 let lastStreakAtGameOver = 0;
 let landedMaterials = new Set();
@@ -275,6 +280,10 @@ function handlePointerDown(e) {
   canvas.setPointerCapture(e.pointerId);
 }
 
+function trackEvent(name, params = {}) {
+  if (typeof gtag === 'function') gtag('event', name, params);
+}
+
 function handlePointerUp(e) {
   e.preventDefault();
   if (!isPointerDown) return;
@@ -283,6 +292,7 @@ function handlePointerUp(e) {
   if (gameOver) return;
   if (!figure.grounded && !figure.teeterState) return;
 
+  if (currentLandIndex === 0) trackEvent('game_start');
   const pressDuration = Math.min(performance.now() - pressStartTime, MAX_PRESS_MS);
   const t = pressDuration / MAX_PRESS_MS;
   const mult = figure.teeterState ? PANIC_JUMP_MULT : 1;
@@ -372,6 +382,10 @@ function updatePhysics(dt) {
           if (land === nextLand) {
             currentLandIndex++;
             bestLands = Math.max(bestLands, currentLandIndex);
+            if (bestLands > personalRecord) {
+              personalRecord = bestLands;
+              try { localStorage.setItem('slipland_personal', String(personalRecord)); } catch (_) {}
+            }
             if (Math.abs(landingVx) < 15) {
               consecutiveSafeLandings++;
             } else {
@@ -404,6 +418,8 @@ function updatePhysics(dt) {
       if (!figure.grounded && figure.y + FIGURE_RADIUS > WORLD_HEIGHT) {
         lastStreakAtGameOver = consecutiveSafeLandings;
         gameOver = true;
+        trackEvent('game_over', { score: bestLands });
+        if (bestLands > (worldRecord ?? 0)) submitWorldRecord(bestLands);
         consecutiveSafeLandings = 0;
         break;
       }
@@ -484,6 +500,20 @@ function render() {
   ctx.font = '14px sans-serif';
   ctx.fillStyle = '#b0b0b0';
   ctx.fillText(`Best: ${bestLands}`, pad + 16, pad + 42);
+
+  const recordW = 140;
+  const recordH = 44;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.fillRect(displayW - pad - recordW, pad, recordW, recordH);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.strokeRect(displayW - pad - recordW, pad, recordW, recordH);
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#e8e8e8';
+  ctx.fillText(`Personal: ${personalRecord}`, displayW - pad - 16, pad + 18);
+  ctx.fillStyle = '#b0b0b0';
+  ctx.fillText(`World: ${worldRecord != null ? worldRecord : '—'}`, displayW - pad - 16, pad + 36);
+  ctx.textAlign = 'left';
   let y = pad + 42;
   if (showMaterial) {
     y += 16;
@@ -793,7 +823,46 @@ function setupPlayOverlay() {
 }
 
 
+function fetchWorldRecord() {
+  if (FIREBASE_DB_URL) {
+    const url = FIREBASE_DB_URL.replace(/\/$/, '') + '/worldRecord.json';
+    fetch(url).then(r => r.json()).then(v => {
+      if (typeof v === 'number' && v >= 0) worldRecord = v;
+      else if (v?.record != null) worldRecord = v.record;
+    }).catch(() => {});
+  } else {
+    fetch('world-record.json').then(r => r.json()).then(d => { if (d?.record != null) worldRecord = d.record; }).catch(() => {});
+  }
+}
+
+function submitWorldRecord(score) {
+  if (!FIREBASE_DB_URL || score <= (worldRecord ?? 0)) return;
+  const url = FIREBASE_DB_URL.replace(/\/$/, '') + '/worldRecord.json';
+  fetch(url).then(r => r.json()).then(current => {
+    const cur = typeof current === 'number' ? current : (current?.record ?? 0);
+    if (score > cur) {
+      return fetch(url, { method: 'PUT', body: JSON.stringify(score), headers: { 'Content-Type': 'application/json' } })
+        .then(res => res.json())
+        .then(v => { worldRecord = typeof v === 'number' ? v : v?.record ?? worldRecord; });
+    }
+  }).catch(() => {});
+}
+
+function loadRecords() {
+  try {
+    const p = parseInt(localStorage.getItem('slipland_personal'), 10);
+    if (!isNaN(p)) personalRecord = p;
+  } catch (_) {}
+  fetchWorldRecord();
+  if (FIREBASE_DB_URL) {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') fetchWorldRecord();
+    });
+  }
+}
+
 function start() {
+  loadRecords();
   handleResize();
   window.addEventListener('resize', () => {
     handleResize();
