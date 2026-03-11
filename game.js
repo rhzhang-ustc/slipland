@@ -68,6 +68,7 @@ async function initAudio() {
       const arr = await res.arrayBuffer();
       soundBuffers[material] = await audioContext.decodeAudioData(arr);
     }
+    await loadGooseSound();
   } catch (_) {}
 }
 function playLandingSound(material, contactQuality = 1) {
@@ -94,6 +95,36 @@ function playLandingSound(material, contactQuality = 1) {
     src.start(audioContext.currentTime);
   } catch (_) {}
 }
+async function loadGooseSound() {
+  if (!audioContext || soundBuffers['goose']) return;
+  try {
+    const res = await fetch('sounds/805297__jahjahjahjah__goose-honk.mp3');
+    const arr = await res.arrayBuffer();
+    soundBuffers['goose'] = await audioContext.decodeAudioData(arr);
+  } catch (_) {}
+}
+function playGooseSound() {
+  try {
+    if (!audioContext) unlockAudio();
+    if (!audioContext) return;
+    loadGooseSound();
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().catch(() => {});
+      return;
+    }
+    const buf = soundBuffers['goose'];
+    if (!buf) return;
+    const src = audioContext.createBufferSource();
+    src.buffer = buf;
+    const gain = audioContext.createGain();
+    gain.gain.setValueAtTime(0.5, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.7);
+    src.connect(gain);
+    gain.connect(audioContext.destination);
+    src.start(audioContext.currentTime);
+  } catch (_) {}
+}
+
 function playFallOffSound(material) {
   try {
     if (!audioContext) initAudio();
@@ -148,6 +179,8 @@ function triggerFallOffVibration(material) {
 // DOM
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const gooseImg = new Image();
+gooseImg.src = 'images/goose.png';
 
 // World dimensions (width derived from aspect ratio)
 let WORLD_WIDTH = 400;
@@ -381,6 +414,7 @@ function updatePhysics(dt) {
           figure.landingEffect = { startTime: performance.now(), landingVx, contactQuality, material: land.material };
           if (land === nextLand) {
             currentLandIndex++;
+            if (currentLandIndex > 0 && currentLandIndex % 10 === 0) playGooseSound();
             bestLands = Math.max(bestLands, currentLandIndex);
             if (bestLands > personalRecord) {
               personalRecord = bestLands;
@@ -504,8 +538,8 @@ function render() {
   ctx.fillStyle = '#b0b0b0';
   ctx.fillText(`Best: ${bestLands}`, pad + 16, pad + 42);
 
-  const recordW = 140;
-  const recordH = 44;
+  const recordW = 120;
+  const recordH = 32;
   ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
   ctx.fillRect(displayW - pad - recordW, pad, recordW, recordH);
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
@@ -513,9 +547,7 @@ function render() {
   ctx.font = '12px sans-serif';
   ctx.textAlign = 'right';
   ctx.fillStyle = '#e8e8e8';
-  ctx.fillText(`Personal: ${personalRecord}`, displayW - pad - 16, pad + 18);
-  ctx.fillStyle = '#b0b0b0';
-  ctx.fillText(`World: ${worldRecord != null ? worldRecord : '—'}`, displayW - pad - 16, pad + 36);
+  ctx.fillText(`Personal: ${personalRecord}`, displayW - pad - 16, pad + 22);
   ctx.textAlign = 'left';
   let y = pad + 42;
   if (showMaterial) {
@@ -668,19 +700,33 @@ function render() {
     : figure.interactionState === 'sliding' ? '#e94560'
     : figure.interactionState === 'incipient' ? '#ffb347'
     : '#4ecdc4';
-  ctx.fillStyle = figColor;
-  ctx.beginPath();
-  ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#2d4059';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  let figCenterY = fy;
+  let figTop = fy - fr;
+  if (gooseImg.complete && gooseImg.naturalWidth) {
+    const size = fr * 4.2;
+    const groundY = fy + fr;
+    figCenterY = groundY - size / 2;
+    figTop = figCenterY - size / 2;
+    ctx.save();
+    ctx.translate(fx, figCenterY);
+    if (figure.vx < -5) ctx.scale(-1, 1);
+    ctx.drawImage(gooseImg, -size / 2, -size / 2, size, size);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = figColor;
+    ctx.beginPath();
+    ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#2d4059';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
 
   if (figure.teeterState) {
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('TAP!', fx, fy - fr - 16);
+    ctx.fillText('TAP!', fx, figTop - 16);
   }
 
   if (hintDisplay) {
@@ -708,9 +754,9 @@ function render() {
     ctx.lineWidth = 4;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(fx, fy);
+    ctx.moveTo(fx, figCenterY);
     const arrowEndX = fx + arrowLength * Math.cos(LAUNCH_ANGLE);
-    const arrowEndY = fy - arrowLength * Math.sin(LAUNCH_ANGLE);
+    const arrowEndY = figCenterY - arrowLength * Math.sin(LAUNCH_ANGLE);
     ctx.lineTo(arrowEndX, arrowEndY);
     ctx.stroke();
 
