@@ -31,22 +31,36 @@ const MATERIAL_NAMES = Object.keys(MATERIALS);
 const MATERIAL_HINTS = { ice: 'Slippery!', rubber: 'Stable!' };
 const HINT_DISPLAY_MS = 1800;
 
-// Audio - material-specific landing sounds (local), from rse/soundfx (CC0/CC-BY)
+// Audio - material-specific landing sounds. iOS Safari doesn't support OGG; use MP3 fallbacks.
+const _ogg = { rubber: 'sounds/rubber.ogg', wood: 'sounds/wood.ogg', plastic: 'sounds/plastic.ogg' };
+const _mp3 = { rubber: 'sounds/punch1.mp3', wood: 'sounds/punch1.mp3', plastic: 'sounds/click1.mp3' };
 const MATERIAL_SOUNDS = {
-  rubber: 'sounds/rubber.ogg',    // Kenney impactSoft_heavy - deep, muffled
-  ice: 'sounds/chime2.mp3',      // crisp, icy
-  wood: 'sounds/wood.ogg',       // Kenney impactWood_medium - softer thud
-  metal: 'sounds/bling2.mp3',     // metallic clang
-  sandpaper: 'sounds/slide2.mp3', // rough scrape (slide1 has 48kHz decode issues in some browsers)
-  plastic: 'sounds/plastic.ogg',  // Kenney impactPlate_light - hollow, plastic-like
+  rubber: 'sounds/rubber.ogg', ice: 'sounds/chime2.mp3', wood: 'sounds/wood.ogg',
+  metal: 'sounds/bling2.mp3', sandpaper: 'sounds/slide2.mp3', plastic: 'sounds/plastic.ogg',
 };
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+function getSoundUrl(material) {
+  if (isIOS && _ogg[material]) return _mp3[material];
+  return MATERIAL_SOUNDS[material];
+}
 let audioContext = null;
 const soundBuffers = {};
-async function initAudio() {
+function unlockAudio() {
   if (audioContext) return;
   audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+  const buf = audioContext.createBuffer(1, 1, 22050);
+  const src = audioContext.createBufferSource();
+  src.buffer = buf;
+  src.connect(audioContext.destination);
+  src.start(0);
+}
+async function initAudio() {
+  if (!audioContext) return;
   try {
-    for (const [material, url] of Object.entries(MATERIAL_SOUNDS)) {
+    for (const material of Object.keys(MATERIAL_SOUNDS)) {
+      if (soundBuffers[material]) continue;
+      const url = getSoundUrl(material);
       const res = await fetch(url);
       const arr = await res.arrayBuffer();
       soundBuffers[material] = await audioContext.decodeAudioData(arr);
@@ -166,7 +180,9 @@ function getCurrentLand() {
 function initGame() {
   const cw = canvas.clientWidth || window.innerWidth;
   const ch = canvas.clientHeight || window.innerHeight;
-  WORLD_WIDTH = WORLD_HEIGHT * (cw / ch) || WORLD_HEIGHT * 1.5;
+  const aspect = cw / ch;
+  const minAspect = 0.85;
+  WORLD_WIDTH = Math.max(WORLD_HEIGHT * aspect, WORLD_HEIGHT * minAspect) || WORLD_HEIGHT * 1.5;
 
   lands = [];
   const baseY = WORLD_HEIGHT - 100;
@@ -240,10 +256,8 @@ function screenToWorld(screenX, screenY) {
 function handlePointerDown(e) {
   if (gameOver) return;
   e.preventDefault();
+  unlockAudio();
   initAudio();
-  if (audioContext?.state === 'suspended') {
-    audioContext.resume().catch(() => {});
-  }
   if (!figure.grounded) return;
 
   isPointerDown = true;
@@ -729,7 +743,9 @@ function handleResize() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(dpr, dpr);
 
-  WORLD_WIDTH = WORLD_HEIGHT * (w / h);
+  const aspect = w / h;
+  const minAspect = 0.85;
+  WORLD_WIDTH = Math.max(WORLD_HEIGHT * aspect, WORLD_HEIGHT * minAspect);
 }
 
 function setupInput() {
@@ -744,6 +760,7 @@ function setupInput() {
 
   canvas.addEventListener('click', (e) => {
     if (gameOver) {
+      unlockAudio();
       initGame();
     }
   });

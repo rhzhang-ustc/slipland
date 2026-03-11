@@ -56,4 +56,5 @@ Each material has its own landing sound:
 | Plastic   | impactPlate_light (Kenney) | Hollow, plastic-like |
 
 Sounds from [rse/soundfx](https://github.com/rse/soundfx) (MIT, CC0/CC-BY) and [Kenney](https://kenney.nl/assets/impact-sounds) (CC0). Stored locally in `sounds/`.
-# SlipLand
+
+**iOS note:** Haptic vibration is not supported in Safari (iOS limitation). Make sure the device is not in silent mode for audio.
