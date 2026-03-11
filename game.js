@@ -419,7 +419,10 @@ function updatePhysics(dt) {
         lastStreakAtGameOver = consecutiveSafeLandings;
         gameOver = true;
         trackEvent('game_over', { score: bestLands });
-        if (bestLands > (worldRecord ?? 0)) submitWorldRecord(bestLands);
+        if (bestLands > (worldRecord ?? 0)) {
+          trackEvent('world_record_beaten', { score: bestLands, previous_record: worldRecord ?? 0 });
+          submitWorldRecord(bestLands);
+        }
         consecutiveSafeLandings = 0;
         break;
       }
