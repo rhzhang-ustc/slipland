@@ -168,6 +168,7 @@ let consecutiveSafeLandings = 0;
 let lastStreakAtGameOver = 0;
 let landedMaterials = new Set();
 let hintDisplay = null;
+let hasRequestedFullscreen = false;
 let isPointerDown = false;
 let pressStartTime = 0;
 let pressScreenX = 0;
@@ -258,6 +259,10 @@ function handlePointerDown(e) {
   e.preventDefault();
   unlockAudio();
   initAudio();
+  if (!hasRequestedFullscreen) {
+    hasRequestedFullscreen = true;
+    tryFullscreen();
+  }
   if (!figure.grounded) return;
 
   isPointerDown = true;
@@ -766,13 +771,46 @@ function setupInput() {
   });
 }
 
+function updateRotateOverlay() {
+  const overlay = document.getElementById('rotateOverlay');
+  if (!overlay) return;
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const isMobile = window.innerWidth < 768 || 'ontouchstart' in window;
+  if (isMobile && isPortrait) {
+    overlay.classList.remove('hidden');
+  } else {
+    overlay.classList.add('hidden');
+  }
+}
+
+function setupRotateOverlay() {
+  const overlay = document.getElementById('rotateOverlay');
+  if (overlay) {
+    overlay.addEventListener('click', () => {
+      tryFullscreen();
+    });
+  }
+}
+
+function tryFullscreen() {
+  if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+}
+
 function start() {
   handleResize();
-  window.addEventListener('resize', handleResize);
+  window.addEventListener('resize', () => {
+    handleResize();
+    updateRotateOverlay();
+  });
+  updateRotateOverlay();
+  setupRotateOverlay();
   setupInput();
   initGame();
   lastTime = 0;
   requestAnimationFrame(gameLoop);
+  tryFullscreen();
 }
 
 start();

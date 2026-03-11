@@ -15,6 +15,44 @@ html, body {
   -webkit-user-select: none;
 }
 
+#rotateOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #1a1a2e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  transition: opacity 0.3s ease;
+}
+#rotateOverlay.hidden {
+  pointer-events: none;
+  opacity: 0;
+}
+#rotateContent {
+  text-align: center;
+  color: #fff;
+}
+#rotateIcon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: rotateHint 2s ease-in-out infinite;
+}
+@keyframes rotateHint {
+  0%, 100% { transform: rotate(-90deg); }
+  50% { transform: rotate(-60deg); }
+}
+#rotateContent p {
+  font-size: 1.25rem;
+  font-family: sans-serif;
+}
+#rotateContent .rotateSub {
+  font-size: 0.9rem;
+  color: #a0a0a0;
+  margin-top: 0.5rem;
+}
+
 #gameCanvas {
   display: block;
   width: 100vw;
