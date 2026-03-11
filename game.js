@@ -70,7 +70,11 @@ async function initAudio() {
 function playLandingSound(material, contactQuality = 1) {
   try {
     if (!audioContext) initAudio();
-    if (!audioContext || audioContext.state === 'suspended') return;
+    if (!audioContext) return;
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().catch(() => {});
+      return;
+    }
     const buf = soundBuffers[material];
     if (!buf) return;
     const src = audioContext.createBufferSource();
@@ -90,7 +94,11 @@ function playLandingSound(material, contactQuality = 1) {
 function playFallOffSound(material) {
   try {
     if (!audioContext) initAudio();
-    if (!audioContext || audioContext.state === 'suspended') return;
+    if (!audioContext) return;
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().catch(() => {});
+      return;
+    }
     const buf = soundBuffers[material];
     if (!buf) return;
     const src = audioContext.createBufferSource();
@@ -516,11 +524,13 @@ function render() {
     ctx.fillRect(sx, sy, sw, sh);
     if (mat.texture === 'stripes') {
       ctx.strokeStyle = mat.stroke;
-      ctx.lineWidth = 2;
-      for (let ox = 0; ox < sw + 20; ox += 12) {
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'round';
+      const spacing = Math.max(8, Math.floor(sw / 20));
+      for (let ox = spacing; ox < sw; ox += spacing) {
         ctx.beginPath();
-        ctx.moveTo(sx + ox, sy);
-        ctx.lineTo(sx + ox, sy + sh);
+        ctx.moveTo(sx + ox, sy + 1);
+        ctx.lineTo(sx + ox, sy + sh - 1);
         ctx.stroke();
       }
     } else if (mat.texture === 'dots') {
@@ -773,9 +783,9 @@ function setupPlayOverlay() {
   const isMobile = window.innerWidth < 768 || 'ontouchstart' in window;
   if (!isMobile) return;
   overlay.classList.remove('hidden');
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
     unlockAudio();
-    initAudio();
+    await initAudio();
     overlay.classList.add('hidden');
   });
 }
