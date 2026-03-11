@@ -771,10 +771,8 @@ function setupPlayOverlay() {
   const btn = document.getElementById('playBtn');
   if (!overlay || !btn) return;
   const isMobile = window.innerWidth < 768 || 'ontouchstart' in window;
-  if (!isMobile) {
-    overlay.classList.add('hidden');
-    return;
-  }
+  if (!isMobile) return;
+  overlay.classList.remove('hidden');
   btn.addEventListener('click', () => {
     unlockAudio();
     initAudio();
