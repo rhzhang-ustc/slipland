@@ -30,6 +30,13 @@ const MATERIALS = {
 const MATERIAL_NAMES = Object.keys(MATERIALS);
 const MATERIAL_HINTS = { ice: 'Slippery!', rubber: 'Stable!' };
 
+// Starfield for starry background (normalized 0-1 coords)
+const STAR_POSITIONS = [
+  [0.05, 0.15], [0.18, 0.28], [0.28, 0.08], [0.42, 0.18], [0.58, 0.32], [0.72, 0.12],
+  [0.88, 0.22], [0.95, 0.42], [0.08, 0.65], [0.35, 0.78], [0.62, 0.88], [0.78, 0.72],
+  [0.22, 0.48], [0.88, 0.62], [0.12, 0.35], [0.52, 0.55], [0.68, 0.42], [0.35, 0.12],
+];
+
 // World record: set to your Firebase Realtime Database URL (e.g. https://PROJECT-default-rtdb.firebaseio.com) for live sync
 const FIREBASE_DB_URL = '';
 const HINT_DISPLAY_MS = 1800;
@@ -512,14 +519,51 @@ function updatePhysics(dt) {
   checkSlidOff();
 }
 
+function drawStarryBackground(displayW, displayH) {
+  const grad = ctx.createLinearGradient(0, 0, 0, displayH);
+  grad.addColorStop(0, '#1a1a3e');
+  grad.addColorStop(0.35, '#16213e');
+  grad.addColorStop(0.7, '#0f3460');
+  grad.addColorStop(1, '#1a1a3e');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, displayW, displayH);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+  for (const [nx, ny] of STAR_POSITIONS) {
+    const px = nx * displayW;
+    const py = ny * displayH;
+    ctx.beginPath();
+    ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function roundRect(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  if (ctx.roundRect) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+  }
+}
+
 function render() {
   const displayW = canvas.clientWidth || window.innerWidth;
   const displayH = canvas.clientHeight || window.innerHeight;
   const scaleX = displayW / WORLD_WIDTH;
   const scaleY = displayH / WORLD_HEIGHT;
 
-  ctx.fillStyle = '#1a1a2e';
-  ctx.fillRect(0, 0, displayW, displayH);
+  drawStarryBackground(displayW, displayH);
 
   const pad = 12;
   const land = getCurrentLand();
@@ -572,22 +616,31 @@ function render() {
     if (sx + sw < 0 || sx > displayW) continue;
 
     const mat = MATERIALS[land.material];
+    const radius = Math.min(8, sh * 0.35);
     if (land.isStart) {
       ctx.fillStyle = '#27ae60';
+      roundRect(sx, sy, sw, sh, radius);
+      ctx.fill();
+      ctx.strokeStyle = '#d4af37';
+      ctx.lineWidth = 3;
+      ctx.stroke();
       ctx.shadowColor = '#f1c40f';
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = 8;
       ctx.strokeStyle = '#f1c40f';
-      ctx.lineWidth = 4;
-      ctx.fillRect(sx, sy, sw, sh);
-      ctx.strokeRect(sx, sy, sw, sh);
+      ctx.lineWidth = 2;
+      roundRect(sx, sy, sw, sh, radius);
+      ctx.stroke();
       ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.fillRect(sx + 2, sy + 2, sw - 4, Math.max(4, sh * 0.35));
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 20px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('START', sx + sw / 2, sy - 12);
+      ctx.fillText('START', sx + sw / 2, sy - 80);
     } else {
     ctx.fillStyle = mat.fill;
-    ctx.fillRect(sx, sy, sw, sh);
+    roundRect(sx, sy, sw, sh, radius);
+    ctx.fill();
     if (mat.texture === 'stripes') {
       ctx.strokeStyle = mat.stroke;
       ctx.lineWidth = 1;
@@ -635,9 +688,12 @@ function render() {
         ctx.fill();
       }
     }
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.fillRect(sx + 4, sy + 4, sw - 8, Math.max(4, sh * 0.22));
     ctx.strokeStyle = mat.stroke;
     ctx.lineWidth = 2;
-    ctx.strokeRect(sx, sy, sw, sh);
+    roundRect(sx, sy, sw, sh, radius);
+    ctx.stroke();
 
     const label = land.material.charAt(0).toUpperCase() + land.material.slice(1);
     ctx.fillStyle = '#e8e8e8';
@@ -749,40 +805,39 @@ function render() {
   if (isPointerDown && figure.grounded && !figure.sliding) {
     const pressDuration = Math.min(performance.now() - pressStartTime, MAX_PRESS_MS);
     const t = pressDuration / MAX_PRESS_MS;
-    const arrowLength = 30 + t * 80;
 
-    ctx.strokeStyle = '#ffcc00';
-    ctx.lineWidth = 4;
+    const arcRadius = 50 + t * 70;
+    const arcSpan = Math.PI * 0.5;
+    const canvasLaunch = -LAUNCH_ANGLE;
+    const startAngle = canvasLaunch - arcSpan / 2;
+    const endAngle = canvasLaunch + arcSpan / 2;
+
+    ctx.save();
+    ctx.translate(fx, figCenterY);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 6;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(fx, figCenterY);
-    const arrowEndX = fx + arrowLength * Math.cos(LAUNCH_ANGLE);
-    const arrowEndY = figCenterY - arrowLength * Math.sin(LAUNCH_ANGLE);
-    ctx.lineTo(arrowEndX, arrowEndY);
+    ctx.arc(0, 0, arcRadius, startAngle, endAngle);
     ctx.stroke();
 
-    const headLen = 14;
+    ctx.strokeStyle = t > 0.7 ? '#ff9500' : t > 0.4 ? '#7bed9f' : '#4ecdc4';
+    ctx.lineWidth = 5;
     ctx.beginPath();
-    ctx.moveTo(arrowEndX, arrowEndY);
-    ctx.lineTo(
-      arrowEndX - headLen * Math.cos(LAUNCH_ANGLE - 0.4),
-      arrowEndY + headLen * Math.sin(LAUNCH_ANGLE - 0.4)
-    );
-    ctx.moveTo(arrowEndX, arrowEndY);
-    ctx.lineTo(
-      arrowEndX - headLen * Math.cos(LAUNCH_ANGLE + 0.4),
-      arrowEndY + headLen * Math.sin(LAUNCH_ANGLE + 0.4)
-    );
+    ctx.arc(0, 0, arcRadius, startAngle, startAngle + t * arcSpan);
     ctx.stroke();
+
+    ctx.restore();
 
     const rect = canvas.getBoundingClientRect();
     const pressX = pressScreenX - rect.left;
     const pressY = pressScreenY - rect.top;
-    ctx.fillStyle = 'rgba(255, 204, 0, 0.6)';
+    ctx.fillStyle = t > 0.7 ? 'rgba(255, 149, 0, 0.6)' : 'rgba(78, 205, 196, 0.6)';
     ctx.beginPath();
     ctx.arc(pressX, pressY, 12, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#ffcc00';
+    ctx.strokeStyle = t > 0.7 ? '#ff9500' : '#4ecdc4';
     ctx.lineWidth = 2;
     ctx.stroke();
   }

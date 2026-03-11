@@ -19,21 +19,42 @@
 </head>
 <body>
   <div id="instructionsOverlay">
+    <div class="instructions-stars" aria-hidden="true"></div>
     <div id="instructionsModal">
-      <h2>How to Play</h2>
-      <div class="instructions-content">
-        <h3>Controls</h3>
-        <p><strong>Press and hold</strong> to charge your jump, then <strong>release</strong> to launch. Longer hold = longer jump. You can only jump rightward.</p>
-        <p><strong>Teetering?</strong> When you land near the edge (figure turns red), <strong>tap quickly</strong> to save yourself!</p>
-
-        <h3>Physical Properties & Movement</h3>
-        <p>Each platform has different <strong>friction</strong>. This affects how much you slide after landing:</p>
-        <ul>
-          <li><strong>Low friction</strong> (ice, metal): Slippery! You slide more—land with care or you may skid off the edge.</li>
-          <li><strong>High friction</strong> (rubber, sandpaper): Grippy and forgiving. Less sliding, safer landings.</li>
-          <li><strong>Medium friction</strong> (wood, plastic): Somewhere in between.</li>
-        </ul>
-        <p><strong>Land too fast</strong> and you'll skid. Land gently (low horizontal speed) for a safe stop and build a streak.</p>
+      <div class="instructions-title-banner">
+        <h1>SLIPLAND: Master the Friction!</h1>
+      </div>
+      <div class="instructions-platforms">
+        <div class="platform-card platform-start">
+          <div class="platform-bar"></div>
+          <span class="platform-label">START</span>
+          <p class="platform-desc">Hold &amp; Release to Jump!</p>
+        </div>
+        <div class="platform-card platform-ice">
+          <div class="platform-bar"></div>
+          <span class="platform-label">ICE</span>
+          <p class="platform-desc">LOW FRICTION!<br><small>(Slide-Off Risk)</small></p>
+        </div>
+        <div class="platform-card platform-wood">
+          <div class="platform-bar"></div>
+          <span class="platform-label">WOOD</span>
+          <p class="platform-desc">MEDIUM FRICTION</p>
+        </div>
+        <div class="platform-card platform-sandpaper">
+          <div class="platform-bar"></div>
+          <span class="platform-label">SANDPAPER</span>
+          <p class="platform-desc">HIGH FRICTION!<br><small>(Stick Fast)</small></p>
+        </div>
+        <div class="platform-card platform-teeter">
+          <div class="platform-bar platform-edge"></div>
+          <span class="platform-label">TEETER!</span>
+          <p class="platform-desc"><strong>Tap to save yourself!</strong></p>
+        </div>
+        <div class="platform-card platform-plastic">
+          <div class="platform-bar"></div>
+          <span class="platform-label">PLASTIC</span>
+          <p class="platform-desc">VARIED</p>
+        </div>
       </div>
       <button id="instructionsPlayBtn">Play</button>
     </div>
