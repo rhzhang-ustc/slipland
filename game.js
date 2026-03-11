@@ -776,23 +776,29 @@ function setupInput() {
   });
 }
 
-function setupPlayOverlay() {
+function updatePlayOverlay() {
   const overlay = document.getElementById('playOverlay');
-  const btn = document.getElementById('playBtn');
-  if (!overlay || !btn) return;
+  if (!overlay) return;
   const isMobile = window.innerWidth < 768 || 'ontouchstart' in window;
-  if (!isMobile) return;
-  overlay.classList.remove('hidden');
-  btn.addEventListener('click', async () => {
-    unlockAudio();
-    await initAudio();
+  const isPortrait = window.innerHeight > window.innerWidth;
+  if (!isMobile || !isPortrait) {
     overlay.classList.add('hidden');
-  });
+    return;
+  }
+  overlay.classList.remove('hidden');
 }
+
+function setupPlayOverlay() {
+  updatePlayOverlay();
+}
+
 
 function start() {
   handleResize();
-  window.addEventListener('resize', handleResize);
+  window.addEventListener('resize', () => {
+    handleResize();
+    updatePlayOverlay();
+  });
   setupPlayOverlay();
   setupInput();
   initGame();
