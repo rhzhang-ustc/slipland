@@ -22,20 +22,13 @@ const WOBBLE_FREQ = 0.02;
 const MATERIALS = {
   ice: { frictionMin: 0.30, frictionMax: 0.45, lengthBias: 1.0, fill: '#a8d8ea', stroke: '#7eb8d4', texture: 'none', cue: 'sparkle', failureStyle: 'slide', teeterMs: 600, wobbleMultiplier: 1.4, edgeBounceVy: 0.9, edgeBounceVx: 1.0 },
   wood: { frictionMin: 0.40, frictionMax: 0.55, lengthBias: 1.0, fill: '#c4a77d', stroke: '#a08050', texture: 'stripes', cue: 'none', failureStyle: 'tip', teeterMs: 900, wobbleMultiplier: 1.0, edgeBounceVy: 1.0, edgeBounceVx: 1.0 },
-  rubber: { frictionMin: 0.78, frictionMax: 0.95, lengthBias: 0.9, fill: '#2d2d2d', stroke: '#1a1a1a', texture: 'dots', cue: 'sheen', failureStyle: 'grip', teeterMs: 1200, wobbleMultiplier: 0.6, edgeBounceVy: 1.3, edgeBounceVx: 1.2 },
-  metal: { frictionMin: 0.35, frictionMax: 0.50, lengthBias: 1.0, fill: '#7b8c9a', stroke: '#5a6a78', texture: 'none', cue: 'none', failureStyle: 'sharp', teeterMs: 700, wobbleMultiplier: 1.1, edgeBounceVy: 0.8, edgeBounceVx: 1.3 },
+  rubber: { frictionMin: 0.78, frictionMax: 0.95, lengthBias: 0.9, fill: '#91a789', stroke: '#657d61', texture: 'dots', cue: 'sheen', failureStyle: 'grip', teeterMs: 1200, wobbleMultiplier: 0.6, edgeBounceVy: 1.3, edgeBounceVx: 1.2 },
+  metal: { frictionMin: 0.35, frictionMax: 0.50, lengthBias: 1.0, fill: '#aabcc9', stroke: '#738c9c', texture: 'none', cue: 'none', failureStyle: 'sharp', teeterMs: 700, wobbleMultiplier: 1.1, edgeBounceVy: 0.8, edgeBounceVx: 1.3 },
   sandpaper: { frictionMin: 0.80, frictionMax: 0.95, lengthBias: 0.67, fill: '#8b7355', stroke: '#6b5340', texture: 'dots', cue: 'dust', failureStyle: 'grip', teeterMs: 1100, wobbleMultiplier: 0.8, edgeBounceVy: 1.1, edgeBounceVx: 1.0 },
-  plastic: { frictionMin: 0.50, frictionMax: 0.65, lengthBias: 0.95, fill: '#ffd93d', stroke: '#e6c235', texture: 'none', cue: 'none', failureStyle: 'bounce', teeterMs: 850, wobbleMultiplier: 1.2, edgeBounceVy: 1.2, edgeBounceVx: 1.1 },
+  plastic: { frictionMin: 0.50, frictionMax: 0.65, lengthBias: 0.95, fill: '#ddd18e', stroke: '#ad9f58', texture: 'none', cue: 'none', failureStyle: 'bounce', teeterMs: 850, wobbleMultiplier: 1.2, edgeBounceVy: 1.2, edgeBounceVx: 1.1 },
 };
 const MATERIAL_NAMES = Object.keys(MATERIALS);
 const MATERIAL_HINTS = { ice: 'Slippery!', rubber: 'Stable!' };
-
-// Starfield for starry background (normalized 0-1 coords)
-const STAR_POSITIONS = [
-  [0.05, 0.15], [0.18, 0.28], [0.28, 0.08], [0.42, 0.18], [0.58, 0.32], [0.72, 0.12],
-  [0.88, 0.22], [0.95, 0.42], [0.08, 0.65], [0.35, 0.78], [0.62, 0.88], [0.78, 0.72],
-  [0.22, 0.48], [0.88, 0.62], [0.12, 0.35], [0.52, 0.55], [0.68, 0.42], [0.35, 0.12],
-];
 
 // World record: set to your Firebase Realtime Database URL (e.g. https://PROJECT-default-rtdb.firebaseio.com) for live sync
 const FIREBASE_DB_URL = '';
@@ -54,10 +47,18 @@ function getSoundUrl(material) {
   return MATERIAL_SOUNDS[material];
 }
 let audioContext = null;
+let audioLoading = null;
+let soundMuted = false;
+try { soundMuted = localStorage.getItem('slipland_muted') === 'true'; } catch (_) {}
 const soundBuffers = {};
 function unlockAudio() {
-  if (audioContext) return;
-  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioContext) {
+    if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+    return;
+  }
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  try { audioContext = new AudioContextClass(); } catch (_) { return; }
   if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
   const buf = audioContext.createBuffer(1, 1, 22050);
   const src = audioContext.createBufferSource();
@@ -66,19 +67,18 @@ function unlockAudio() {
   src.start(0);
 }
 async function initAudio() {
-  if (!audioContext) return;
-  try {
-    for (const material of Object.keys(MATERIAL_SOUNDS)) {
-      if (soundBuffers[material]) continue;
-      const url = getSoundUrl(material);
-      const res = await fetch(url);
-      const arr = await res.arrayBuffer();
-      soundBuffers[material] = await audioContext.decodeAudioData(arr);
-    }
-    await loadGooseSound();
-  } catch (_) {}
+  if (!audioContext || soundMuted) return;
+  if (audioLoading) return audioLoading;
+  audioLoading = Promise.allSettled(Object.keys(MATERIAL_SOUNDS).map(async (material) => {
+    if (soundBuffers[material]) return;
+    const res = await fetch(getSoundUrl(material));
+    const arr = await res.arrayBuffer();
+    soundBuffers[material] = await audioContext.decodeAudioData(arr);
+  })).then(loadGooseSound).finally(() => { audioLoading = null; });
+  return audioLoading;
 }
 function playLandingSound(material, contactQuality = 1) {
+  if (soundMuted) return;
   try {
     if (!audioContext) initAudio();
     if (!audioContext) return;
@@ -111,6 +111,7 @@ async function loadGooseSound() {
   } catch (_) {}
 }
 function playGooseSound() {
+  if (soundMuted) return;
   try {
     if (!audioContext) unlockAudio();
     if (!audioContext) return;
@@ -133,6 +134,7 @@ function playGooseSound() {
 }
 
 function playFallOffSound(material) {
+  if (soundMuted) return;
   try {
     if (!audioContext) initAudio();
     if (!audioContext) return;
@@ -195,7 +197,7 @@ let WORLD_WIDTH = 400;
 // Game state
 const TEETER_NEAR_EDGE = FIGURE_RADIUS + 15;
 const TEETER_VX_THRESHOLD = 15;
-const PANIC_JUMP_MULT = 0.6;
+const PANIC_JUMP_MULT = 0.85;
 
 let figure = {
   x: 0,
@@ -223,44 +225,53 @@ let landedMaterials = new Set();
 let hintDisplay = null;
 let isPointerDown = false;
 let pressStartTime = 0;
-let pressScreenX = 0;
-let pressScreenY = 0;
+let activePointerId = null;
+let keyboardCharging = false;
+let paused = false;
+let gameTime = 0;
+let pendingSafeLanding = false;
+let runStarted = false;
+let recordAtRunStart = 0;
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const ui = Object.fromEntries([
+  'instructionsOverlay', 'instructionsPlayBtn', 'gameHud', 'scoreValue', 'bestValue',
+  'streakValue', 'surfaceValue', 'surfaceStatus', 'chargeLabel', 'chargeValue', 'chargeFill',
+  'playHint', 'resultOverlay', 'resultScore', 'resultBest', 'resultTitle', 'resultEyebrow',
+  'resultMessage', 'retryBtn', 'pauseOverlay', 'pauseBtn', 'resumeBtn', 'soundBtn',
+].map(id => [id, document.getElementById(id)]));
+
+function getViewMetrics() {
+  const width = canvas.clientWidth || window.innerWidth;
+  const height = canvas.clientHeight || window.innerHeight;
+  const scale = Math.min(width / 850, height / WORLD_HEIGHT);
+  return { width, height, scale, offsetY: height * 0.74 - 500 * scale };
+}
+
+function appendLands(count) {
+  let x = lands.length ? lands[lands.length - 1].xEnd + JUMP_GAP : 40;
+  for (let i = 0; i < count; i++) {
+    const index = lands.length;
+    const isStart = index === 0;
+    // Introduce a neutral surface before the fully mixed course.
+    const material = isStart ? 'rubber' : index === 1 ? 'wood' : MATERIAL_NAMES[Math.floor(Math.random() * MATERIAL_NAMES.length)];
+    const mat = MATERIALS[material];
+    const width = isStart ? LAND_WIDTH : LAND_WIDTH * mat.lengthBias;
+    lands.push({ xStart: x, xEnd: x + width, y: WORLD_HEIGHT - 100,
+      friction: index === 1 ? mat.frictionMax : mat.frictionMin + Math.random() * (mat.frictionMax - mat.frictionMin),
+      material, isStart, height: PLATFORM_HEIGHT, index });
+    x += width + JUMP_GAP;
+  }
+}
 
 function getCurrentLand() {
   return lands[currentLandIndex] || null;
 }
 
 function initGame() {
-  const cw = canvas.clientWidth || window.innerWidth;
-  const ch = canvas.clientHeight || window.innerHeight;
-  const aspect = cw / ch;
-  const minAspect = 0.85;
-  WORLD_WIDTH = Math.max(WORLD_HEIGHT * aspect, WORLD_HEIGHT * minAspect) || WORLD_HEIGHT * 1.5;
-
+  const view = getViewMetrics();
+  WORLD_WIDTH = view.width / view.scale;
   lands = [];
-  const baseY = WORLD_HEIGHT - 100;
-  let x = 40;
-
-  for (let i = 0; i < NUM_LANDS; i++) {
-    const gap = i === 0 ? 0 : JUMP_GAP;
-    x += gap;
-    const isStart = i === 0;
-    const matName = isStart ? 'rubber' : MATERIAL_NAMES[Math.floor(Math.random() * MATERIAL_NAMES.length)];
-    const mat = MATERIALS[matName];
-    const friction = mat.frictionMin + Math.random() * (mat.frictionMax - mat.frictionMin);
-
-    lands.push({
-      xStart: x,
-      xEnd: x + LAND_WIDTH,
-      y: baseY,
-      friction,
-      material: matName,
-      isStart,
-      height: PLATFORM_HEIGHT,
-      index: i,
-    });
-    x += LAND_WIDTH;
-  }
+  appendLands(NUM_LANDS);
 
   const land0 = lands[0];
   figure = {
@@ -283,41 +294,40 @@ function initGame() {
   landedMaterials = new Set();
   hintDisplay = null;
   gameOver = false;
+  isPointerDown = false;
+  activePointerId = null;
+  keyboardCharging = false;
+  pendingSafeLanding = false;
+  runStarted = false;
+  recordAtRunStart = personalRecord;
+  gameTime = 0;
+  lastTime = 0;
+  ui.resultOverlay.hidden = true;
 }
 
-function worldToScreen(x, y) {
-  const scaleX = canvas.width / WORLD_WIDTH;
-  const scaleY = canvas.height / WORLD_HEIGHT;
-  return {
-    x: x * scaleX,
-    y: y * scaleY,
-  };
+function beginCharge() {
+  if (gameOver || paused || !instructionsDismissed || !figure.grounded || isPointerDown) return false;
+  unlockAudio();
+  initAudio();
+  isPointerDown = true;
+  pressStartTime = gameTime;
+  return true;
 }
 
-function screenToWorld(screenX, screenY) {
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = WORLD_WIDTH / canvas.width;
-  const scaleY = WORLD_HEIGHT / canvas.height;
-  const canvasX = screenX - rect.left;
-  const canvasY = screenY - rect.top;
-  return {
-    x: canvasX * scaleX,
-    y: canvasY * scaleY,
-  };
+function getCharge() {
+  return Math.max(0, Math.min((gameTime - pressStartTime) / MAX_PRESS_MS, 1));
+}
+
+function getLaunchSpeed(charge) {
+  const t = figure.teeterState ? Math.max(charge, 0.85) : charge;
+  return (MIN_LAUNCH_SPEED + t * (MAX_LAUNCH_SPEED - MIN_LAUNCH_SPEED)) * (figure.teeterState ? PANIC_JUMP_MULT : 1);
 }
 
 function handlePointerDown(e) {
-  if (gameOver) return;
-  if (!instructionsDismissed) return;
+  if (e.button !== 0 || activePointerId !== null || keyboardCharging) return;
   e.preventDefault();
-  unlockAudio();
-  initAudio();
-  if (!figure.grounded) return;
-
-  isPointerDown = true;
-  pressStartTime = performance.now();
-  pressScreenX = e.clientX;
-  pressScreenY = e.clientY;
+  if (!beginCharge()) return;
+  activePointerId = e.pointerId;
   canvas.setPointerCapture(e.pointerId);
 }
 
@@ -325,28 +335,31 @@ function trackEvent(name, params = {}) {
   if (typeof gtag === 'function') gtag('event', name, params);
 }
 
-function handlePointerUp(e) {
-  e.preventDefault();
+function releaseJump() {
   if (!isPointerDown) return;
   isPointerDown = false;
-
-  if (gameOver || !instructionsDismissed) return;
-  if (!figure.grounded && !figure.teeterState) return;
-
-  if (currentLandIndex === 0) trackEvent('game_start');
-  const pressDuration = Math.min(performance.now() - pressStartTime, MAX_PRESS_MS);
-  const t = pressDuration / MAX_PRESS_MS;
-  const mult = figure.teeterState ? PANIC_JUMP_MULT : 1;
-  const launchSpeed = (MIN_LAUNCH_SPEED + t * (MAX_LAUNCH_SPEED - MIN_LAUNCH_SPEED)) * mult;
-
+  if (gameOver || paused || !instructionsDismissed || !figure.grounded) return;
+  if (!runStarted) { trackEvent('game_start'); runStarted = true; }
+  if (pendingSafeLanding) { consecutiveSafeLandings = 0; pendingSafeLanding = false; }
+  const launchSpeed = getLaunchSpeed(getCharge());
   figure.vx = launchSpeed * Math.cos(LAUNCH_ANGLE);
   figure.vy = -launchSpeed * Math.sin(LAUNCH_ANGLE);
   figure.grounded = false;
+  figure.sliding = false;
   figure.teeterState = null;
 }
 
-function handlePointerCancel(e) {
+function handlePointerUp(e) {
+  if (e.pointerId !== activePointerId) return;
+  e.preventDefault();
+  activePointerId = null;
+  releaseJump();
+}
+
+function handlePointerCancel() {
   isPointerDown = false;
+  activePointerId = null;
+  keyboardCharging = false;
 }
 
 const EDGE_BOUNCE_VY = -140;
@@ -384,7 +397,7 @@ function checkSlidOff() {
 }
 
 function updatePhysics(dt) {
-  if (gameOver) return;
+  if (gameOver || paused || !instructionsDismissed) return;
 
   cameraX = Math.max(0, figure.x - WORLD_WIDTH * 0.35);
 
@@ -419,29 +432,24 @@ function updatePhysics(dt) {
             Math.min(land.xEnd - FIGURE_RADIUS, figure.x));
           figure.grounded = true;
           const contactQuality = Math.max(0, Math.min(1, 1 - Math.abs(landingVx) / VX_DANGER));
-          figure.landingEffect = { startTime: performance.now(), landingVx, contactQuality, material: land.material };
+          figure.landingEffect = { startTime: gameTime, landingVx, contactQuality, material: land.material };
           if (land === nextLand) {
             currentLandIndex++;
+            if (lands.length - currentLandIndex < 8) appendLands(16);
             if (currentLandIndex > 0 && currentLandIndex % 10 === 0) playGooseSound();
             bestLands = Math.max(bestLands, currentLandIndex);
             if (bestLands > personalRecord) {
               personalRecord = bestLands;
               try { localStorage.setItem('slipland_personal', String(personalRecord)); } catch (_) {}
             }
-            if (Math.abs(landingVx) < 15) {
-              consecutiveSafeLandings++;
-            } else {
-              consecutiveSafeLandings = 0;
-            }
-          } else {
-            consecutiveSafeLandings = 0;
+            pendingSafeLanding = true;
           }
           figure.sliding = Math.abs(figure.vx) > FRICTION_DISPLAY_THRESHOLD;
           const avx = Math.abs(figure.vx);
           figure.interactionState = avx > 80 ? 'sliding' : avx > 15 ? 'incipient' : 'stable';
           if (!landedMaterials.has(land.material) && MATERIAL_HINTS[land.material]) {
             landedMaterials.add(land.material);
-            hintDisplay = { text: MATERIAL_HINTS[land.material], startTime: performance.now() };
+            hintDisplay = { text: MATERIAL_HINTS[land.material], startTime: gameTime };
           }
           playLandingSound(land.material, contactQuality);
           triggerLandingVibration(contactQuality, figure.sliding, land.material);
@@ -458,14 +466,7 @@ function updatePhysics(dt) {
       }
 
       if (!figure.grounded && figure.y + FIGURE_RADIUS > WORLD_HEIGHT) {
-        lastStreakAtGameOver = consecutiveSafeLandings;
-        gameOver = true;
-        trackEvent('game_over', { score: bestLands });
-        if (bestLands > (worldRecord ?? 0)) {
-          trackEvent('world_record_beaten', { score: bestLands, previous_record: worldRecord ?? 0 });
-          submitWorldRecord(bestLands);
-        }
-        consecutiveSafeLandings = 0;
+        finishRun();
         break;
       }
     } else {
@@ -496,7 +497,7 @@ function updatePhysics(dt) {
     const mat = MATERIALS[land.material];
     const teeterMs = mat?.teeterMs ?? 900;
     if (figure.teeterState) {
-      const elapsed = performance.now() - figure.teeterState.startTime;
+      const elapsed = gameTime - figure.teeterState.startTime;
       if (elapsed > teeterMs) {
         const nudge = figure.teeterState.edge === 'right' ? 1 : -1;
         figure.vx = nudge * 80;
@@ -510,29 +511,85 @@ function updatePhysics(dt) {
       const nearRight = land.xEnd - figure.x <= TEETER_NEAR_EDGE;
       const nearLeft = figure.x - land.xStart <= TEETER_NEAR_EDGE;
       const edge = nearRight && (figure.x > land.xStart + (land.xEnd - land.xStart) / 2) ? 'right' : nearLeft ? 'left' : null;
-      if (edge) figure.teeterState = { edge, startTime: performance.now() };
+      if (edge) figure.teeterState = { edge, startTime: gameTime };
     } else {
       figure.teeterState = null;
     }
   }
 
   checkSlidOff();
+  if (pendingSafeLanding && figure.grounded && !figure.teeterState && Math.abs(figure.vx) < TEETER_VX_THRESHOLD) {
+    consecutiveSafeLandings++;
+    pendingSafeLanding = false;
+  }
+  if (!figure.grounded && isPointerDown) handlePointerCancel();
 }
 
-function drawStarryBackground(displayW, displayH) {
-  const grad = ctx.createLinearGradient(0, 0, 0, displayH);
-  grad.addColorStop(0, '#1a1a3e');
-  grad.addColorStop(0.35, '#16213e');
-  grad.addColorStop(0.7, '#0f3460');
-  grad.addColorStop(1, '#1a1a3e');
-  ctx.fillStyle = grad;
+function drawBackground(displayW, displayH) {
+  ctx.fillStyle = '#eeeadd';
   ctx.fillRect(0, 0, displayW, displayH);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-  for (const [nx, ny] of STAR_POSITIONS) {
-    const px = nx * displayW;
-    const py = ny * displayH;
+  // A quiet paper grain, fixed in place so it never flickers.
+  ctx.fillStyle = '#6b654211';
+  for (let i = 0; i < 900; i++) {
+    const x = ((i * 157 + i * i * 13) % 2003) / 2003 * displayW;
+    const y = ((i * 89 + i * i * 7) % 1999) / 1999 * displayH;
+    ctx.fillRect(x, y, 1, 1);
+  }
+
+  const sunX = displayW * 0.82;
+  const sunY = displayH * 0.25;
+  const sunR = Math.min(40, displayW * 0.065);
+  ctx.fillStyle = '#d9a082';
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#bd896841';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(sunX + 3, sunY - 2, sunR + 5, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Simple pencil clouds and distant rolling ground.
+  ctx.strokeStyle = '#7d8d783a';
+  ctx.lineWidth = 1.2;
+  for (const [nx, ny, size] of [[0.15, 0.29, 0.9], [0.88, 0.45, 0.7], [0.64, 0.12, 0.5]]) {
+    const x = nx * displayW - (cameraX * 0.02) % (displayW * 0.2);
+    const y = ny * displayH;
     ctx.beginPath();
-    ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+    ctx.moveTo(x - 50 * size, y);
+    ctx.bezierCurveTo(x - 50 * size, y - 18 * size, x - 28 * size, y - 22 * size, x - 18 * size, y - 14 * size);
+    ctx.bezierCurveTo(x - 10 * size, y - 48 * size, x + 30 * size, y - 35 * size, x + 30 * size, y - 15 * size);
+    ctx.bezierCurveTo(x + 55 * size, y - 20 * size, x + 64 * size, y, x + 48 * size, y + 2);
+    ctx.stroke();
+  }
+  for (let layer = 0; layer < 3; layer++) {
+    ctx.fillStyle = ['#cbd5c7', '#b4c3ad', '#98ad91'][layer];
+    ctx.beginPath();
+    ctx.moveTo(0, displayH);
+    for (let x = 0; x <= displayW + 8; x += 8) {
+      const worldX = x + cameraX * (0.04 + layer * 0.04);
+      const y = displayH * (0.65 + layer * 0.12) + Math.sin(worldX * 0.004 + layer * 2) * displayH * 0.055 + Math.cos(worldX * 0.009) * displayH * 0.015;
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(displayW, displayH);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function drawTrajectory(scale, offsetY) {
+  if (!isPointerDown || !figure.grounded || gameOver) return;
+  const speed = getLaunchSpeed(getCharge());
+  const vx = speed * Math.cos(LAUNCH_ANGLE);
+  const vy = -speed * Math.sin(LAUNCH_ANGLE);
+  const flightTime = -2 * vy / GRAVITY;
+  for (let i = 1; i <= 24; i++) {
+    const time = i / 24 * flightTime;
+    const x = (figure.x + vx * time - cameraX) * scale;
+    const y = (figure.y + vy * time + 0.5 * GRAVITY * time * time) * scale + offsetY;
+    ctx.fillStyle = `rgba(72, 81, 58, ${0.3 + (1 - i / 24) * 0.6})`;
+    ctx.beginPath();
+    ctx.arc(x, y, i === 24 ? 4 : 2, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -558,158 +615,69 @@ function roundRect(x, y, w, h, r) {
 }
 
 function render() {
-  const displayW = canvas.clientWidth || window.innerWidth;
-  const displayH = canvas.clientHeight || window.innerHeight;
-  const scaleX = displayW / WORLD_WIDTH;
-  const scaleY = displayH / WORLD_HEIGHT;
-
-  drawStarryBackground(displayW, displayH);
-
-  const pad = 12;
-  const land = getCurrentLand();
-  const showMaterial = figure.grounded && land && !land.isStart;
-  const hudH = 48 + (showMaterial ? 16 : 0) + (consecutiveSafeLandings > 1 ? 16 : 0);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.fillRect(pad, pad, 140, hudH);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(pad, pad, 140, hudH);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 18px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText(`Lands: ${currentLandIndex}`, pad + 16, pad + 22);
-  ctx.font = '14px sans-serif';
-  ctx.fillStyle = '#b0b0b0';
-  ctx.fillText(`Best: ${bestLands}`, pad + 16, pad + 42);
-
-  const recordW = 120;
-  const recordH = 32;
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.fillRect(displayW - pad - recordW, pad, recordW, recordH);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-  ctx.strokeRect(displayW - pad - recordW, pad, recordW, recordH);
-  ctx.font = '12px sans-serif';
-  ctx.textAlign = 'right';
-  ctx.fillStyle = '#e8e8e8';
-  ctx.fillText(`Personal: ${personalRecord}`, displayW - pad - 16, pad + 22);
-  ctx.textAlign = 'left';
-  let y = pad + 42;
-  if (showMaterial) {
-    y += 16;
-    const label = land.material.charAt(0).toUpperCase() + land.material.slice(1);
-    ctx.fillStyle = '#e8e8e8';
-    ctx.fillText(`${label} μ${land.friction.toFixed(2)}`, pad + 16, y);
-  }
-  if (consecutiveSafeLandings > 1) {
-    y += 16;
-    ctx.fillStyle = '#7bed9f';
-    ctx.fillText(`Streak: ${consecutiveSafeLandings}`, pad + 16, y);
-  }
+  const view = getViewMetrics();
+  const { width: displayW, height: displayH, scale: scaleX, offsetY } = view;
+  const scaleY = scaleX;
+  drawBackground(displayW, displayH);
+  drawTrajectory(scaleX, offsetY);
+  if (instructionsDismissed) updateHud();
 
   for (const land of lands) {
     const sx = (land.xStart - cameraX) * scaleX;
-    const sy = land.y * scaleY;
+    const sy = land.y * scaleY + offsetY;
     const sw = (land.xEnd - land.xStart) * scaleX;
-    const sh = land.height * scaleY;
-
+    const sh = Math.max(12, land.height * scaleY);
     if (sx + sw < 0 || sx > displayW) continue;
-
     const mat = MATERIALS[land.material];
-    const radius = Math.min(8, sh * 0.35);
-    if (land.isStart) {
-      ctx.fillStyle = '#27ae60';
-      roundRect(sx, sy, sw, sh, radius);
-      ctx.fill();
-      ctx.strokeStyle = '#d4af37';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.shadowColor = '#f1c40f';
-      ctx.shadowBlur = 8;
-      ctx.strokeStyle = '#f1c40f';
-      ctx.lineWidth = 2;
-      roundRect(sx, sy, sw, sh, radius);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.fillRect(sx + 2, sy + 2, sw - 4, Math.max(4, sh * 0.35));
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 20px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('START', sx + sw / 2, sy - 80);
-    } else {
+    const radius = Math.min(5, sh * 0.25);
+    ctx.fillStyle = '#303b3229';
+    roundRect(sx + 2, sy + 7, sw, sh, radius);
+    ctx.fill();
     ctx.fillStyle = mat.fill;
     roundRect(sx, sy, sw, sh, radius);
     ctx.fill();
+    ctx.strokeStyle = '#465140';
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    ctx.save();
+    ctx.clip();
     if (mat.texture === 'stripes') {
-      ctx.strokeStyle = mat.stroke;
+      ctx.strokeStyle = '#71594066';
       ctx.lineWidth = 1;
-      ctx.lineCap = 'round';
-      const spacing = Math.max(8, Math.floor(sw / 20));
-      for (let ox = spacing; ox < sw; ox += spacing) {
-        ctx.beginPath();
-        ctx.moveTo(sx + ox, sy + 1);
-        ctx.lineTo(sx + ox, sy + sh - 1);
-        ctx.stroke();
+      for (let ox = 10; ox < sw; ox += 23) {
+        ctx.beginPath();ctx.moveTo(sx + ox, sy);ctx.lineTo(sx + ox + 6, sy + sh);ctx.stroke();
       }
     } else if (mat.texture === 'dots') {
       ctx.fillStyle = mat.stroke;
-      for (let ox = 4; ox < sw; ox += 16) {
-        for (let oy = 4; oy < sh; oy += 16) {
-          ctx.beginPath();
-          ctx.arc(sx + ox, sy + oy, 2, 0, Math.PI * 2);
-          ctx.fill();
+      for (let ox = 5; ox < sw; ox += 9) {
+        for (let oy = 6; oy < sh; oy += 8) {
+          ctx.beginPath();ctx.arc(sx + ox, sy + oy, 0.8, 0, Math.PI * 2);ctx.fill();
         }
       }
-    }
-    if (mat.cue === 'sparkle') {
-      const t = performance.now() * 0.003;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.6 + 0.2 * Math.sin(t))';
-      for (let i = 0; i < 8; i++) {
-        const px = sx + 15 + (i * 37 % (sw - 20));
-        const py = sy + 8 + (i * 23 % (sh - 12));
-        ctx.beginPath();
-        ctx.arc(px, py, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else if (mat.cue === 'sheen') {
-      const grad = ctx.createLinearGradient(sx, sy, sx + sw * 0.4, sy + sh);
-      grad.addColorStop(0, 'rgba(255, 255, 255, 0.15)');
-      grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(sx, sy, sw, sh);
-    } else if (mat.cue === 'dust') {
-      ctx.fillStyle = 'rgba(139, 115, 85, 0.25)';
-      for (let i = 0; i < 12; i++) {
-        const px = sx + 8 + (i * 31 % Math.max(1, sw - 16));
-        const py = sy + 4 + (i * 19 % Math.max(1, sh - 8));
-        ctx.beginPath();
-        ctx.arc(px, py, 3, 0, Math.PI * 2);
-        ctx.fill();
+    } else if (land.material === 'ice') {
+      ctx.strokeStyle = '#e9ffff80';ctx.lineWidth = 2;
+      for (let ox = 25; ox < sw; ox += 65) {
+        ctx.beginPath();ctx.moveTo(sx + ox, sy);ctx.lineTo(sx + ox - 15, sy + sh);ctx.stroke();
       }
     }
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.fillRect(sx + 4, sy + 4, sw - 8, Math.max(4, sh * 0.22));
-    ctx.strokeStyle = mat.stroke;
-    ctx.lineWidth = 2;
-    roundRect(sx, sy, sw, sh, radius);
-    ctx.stroke();
-
-    const label = land.material.charAt(0).toUpperCase() + land.material.slice(1);
-    ctx.fillStyle = '#e8e8e8';
-    ctx.font = '14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(label, sx + sw / 2, sy - 8);
-    }
+    ctx.fillStyle = '#ffffff30';
+    ctx.fillRect(sx, sy, sw, 3);
+    ctx.fillStyle = '#00000018';
+    ctx.fillRect(sx, sy + sh - 4, sw, 4);
+    ctx.restore();
+    ctx.fillStyle = '#465640';
+    ctx.font = `${Math.max(8, Math.min(10, displayW / 100))}px "Courier New", monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText(`${String(land.index).padStart(2, '0')} / ${land.isStart ? 'START' : land.material.toUpperCase()}`, sx + 3, sy + sh + 24);
   }
 
   let fx = (figure.x - cameraX) * scaleX;
-  let fy = figure.y * scaleY;
+  let fy = figure.y * scaleY + offsetY;
   const fr = FIGURE_RADIUS * Math.min(scaleX, scaleY);
 
   // Landing wobble, teeter, skid, and material-specific visuals
-  if (figure.landingEffect) {
-    const elapsed = performance.now() - figure.landingEffect.startTime;
+  if (figure.landingEffect && !reducedMotion) {
+    const elapsed = gameTime - figure.landingEffect.startTime;
     if (elapsed > LANDING_EFFECT_MS) {
       figure.landingEffect = null;
     } else {
@@ -766,6 +734,11 @@ function render() {
     figTop = figCenterY - size / 2;
     ctx.save();
     ctx.translate(fx, figCenterY);
+    if (!reducedMotion) {
+      if (!figure.grounded) ctx.rotate(Math.max(-0.18, Math.min(0.2, figure.vy * 0.0004)));
+      if (figure.teeterState) ctx.rotate(Math.sin(gameTime * 0.025) * 0.12);
+      if (isPointerDown) ctx.scale(1 + getCharge() * 0.08, 1 - getCharge() * 0.08);
+    }
     if (figure.vx < -5) ctx.scale(-1, 1);
     ctx.drawImage(gooseImg, -size / 2, -size / 2, size, size);
     ctx.restore();
@@ -780,21 +753,21 @@ function render() {
   }
 
   if (figure.teeterState) {
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#354531';
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('TAP!', fx, figTop - 16);
+    ctx.fillText('QUICK, TAP!', fx, figTop - 16);
   }
 
   if (hintDisplay) {
-    const elapsed = performance.now() - hintDisplay.startTime;
+    const elapsed = gameTime - hintDisplay.startTime;
     if (elapsed > HINT_DISPLAY_MS) {
       hintDisplay = null;
     } else {
       const alpha = elapsed < 300 ? elapsed / 300 : elapsed > HINT_DISPLAY_MS - 400 ? (HINT_DISPLAY_MS - elapsed) / 400 : 1;
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = '#354531';
       ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(hintDisplay.text, displayW / 2, displayH / 2 - 60);
@@ -802,143 +775,176 @@ function render() {
     }
   }
 
-  if (isPointerDown && figure.grounded && !figure.sliding) {
-    const pressDuration = Math.min(performance.now() - pressStartTime, MAX_PRESS_MS);
-    const t = pressDuration / MAX_PRESS_MS;
-
-    const arcRadius = 50 + t * 70;
-    const arcSpan = Math.PI * 0.5;
-    const canvasLaunch = -LAUNCH_ANGLE;
-    const startAngle = canvasLaunch - arcSpan / 2;
-    const endAngle = canvasLaunch + arcSpan / 2;
-
-    ctx.save();
-    ctx.translate(fx, figCenterY);
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.arc(0, 0, arcRadius, startAngle, endAngle);
-    ctx.stroke();
-
-    ctx.strokeStyle = t > 0.7 ? '#ff9500' : t > 0.4 ? '#7bed9f' : '#4ecdc4';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(0, 0, arcRadius, startAngle, startAngle + t * arcSpan);
-    ctx.stroke();
-
-    ctx.restore();
-
-    const rect = canvas.getBoundingClientRect();
-    const pressX = pressScreenX - rect.left;
-    const pressY = pressScreenY - rect.top;
-    ctx.fillStyle = t > 0.7 ? 'rgba(255, 149, 0, 0.6)' : 'rgba(78, 205, 196, 0.6)';
-    ctx.beginPath();
-    ctx.arc(pressX, pressY, 12, 0, Math.PI * 2);
+  if (isPointerDown && figure.grounded) {
+    const t = getCharge();
+    const barWidth = 40;
+    ctx.fillStyle = '#35453126';
+    roundRect(fx - barWidth / 2, figTop - 15, barWidth, 4, 2);
     ctx.fill();
-    ctx.strokeStyle = t > 0.7 ? '#ff9500' : '#4ecdc4';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-
-  if (gameOver) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(0, 0, displayW, displayH);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 32px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Game Over', displayW / 2, displayH / 2 - 40);
-
-    ctx.font = '18px sans-serif';
-    ctx.fillStyle = '#e8e8e8';
-    ctx.fillText(`Lands reached: ${currentLandIndex}`, displayW / 2, displayH / 2 - 10);
-    ctx.fillText(`Best: ${bestLands}`, displayW / 2, displayH / 2 + 15);
-    const restartY = lastStreakAtGameOver > 1 ? 65 : 50;
-    if (lastStreakAtGameOver > 1) {
-      ctx.fillText(`Streak: ${lastStreakAtGameOver}`, displayW / 2, displayH / 2 + 40);
+    if (t > 0) {
+      ctx.fillStyle = t > 0.85 ? '#bf663f' : '#62744d';
+      roundRect(fx - barWidth / 2, figTop - 15, barWidth * t, 4, 2);
+      ctx.fill();
     }
-
-    ctx.font = '16px sans-serif';
-    ctx.fillStyle = '#b0b0b0';
-    ctx.fillText('Tap to restart', displayW / 2, displayH / 2 + restartY);
   }
 }
 
+function updateHud() {
+  ui.scoreValue.textContent = String(currentLandIndex).padStart(2, '0');
+  ui.bestValue.textContent = String(personalRecord).padStart(2, '0');
+  ui.streakValue.textContent = consecutiveSafeLandings > 1 ? `${consecutiveSafeLandings} SAFE LANDINGS` : '';
+  const land = getCurrentLand();
+  const state = figure.teeterState ? 'On the edge · tap to save!' : !figure.grounded ? 'In the air · trust the arc' : land?.isStart ? 'Start · steady ground' : `${land.material.charAt(0).toUpperCase() + land.material.slice(1)} · ${figure.sliding ? 'sliding' : 'settled'}`;
+  ui.surfaceValue.textContent = state;
+  ui.surfaceStatus.style.color = figure.teeterState ? '#9b4829' : '#54634c';
+  const charge = isPointerDown ? getCharge() : 0;
+  ui.chargeValue.textContent = `${Math.round(charge * 100)}%`;
+  ui.chargeFill.style.width = `${charge * 100}%`;
+  ui.chargeFill.style.background = charge > 0.85 ? '#b95e38' : '#718255';
+  ui.chargeLabel.textContent = figure.teeterState ? 'quick, tap!' : !figure.grounded ? 'airborne' : isPointerDown ? 'release to jump' : 'hold to charge';
+}
+
+function finishRun() {
+  lastStreakAtGameOver = consecutiveSafeLandings;
+  gameOver = true;
+  handlePointerCancel();
+  trackEvent('game_over', { score: bestLands });
+  if (bestLands > (worldRecord ?? 0)) {
+    trackEvent('world_record_beaten', { score: bestLands, previous_record: worldRecord ?? 0 });
+    submitWorldRecord(bestLands);
+  }
+  const newBest = bestLands > recordAtRunStart;
+  ui.resultEyebrow.textContent = newBest ? 'NEW BEST!' : 'OOPS.';
+  ui.resultTitle.textContent = newBest ? 'Nice run.' : 'Slipped away.';
+  ui.resultMessage.textContent = lastStreakAtGameOver > 1 ? `${lastStreakAtGameOver} safe landings in a row. Nicely done.` : bestLands === 0 ? 'Hold a little longer. Follow the dotted arc.' : 'Another go?';
+  ui.resultScore.textContent = bestLands;
+  ui.resultBest.textContent = personalRecord;
+  ui.resultOverlay.hidden = false;
+  ui.pauseBtn.hidden = true;
+  ui.retryBtn.focus({ preventScroll: true });
+}
+
+function startRun() {
+  initGame();
+  paused = false;
+  instructionsDismissed = true;
+  document.body.classList.remove('at-home');
+  canvas.tabIndex = 0;
+  ui.instructionsOverlay.hidden = true;
+  ui.pauseOverlay.hidden = true;
+  ui.gameHud.hidden = false;
+  ui.pauseBtn.hidden = false;
+  unlockAudio();
+  initAudio();
+  canvas.focus({ preventScroll: true });
+}
+
+function goHome() {
+  handlePointerCancel();
+  instructionsDismissed = false;
+  document.body.classList.add('at-home');
+  canvas.tabIndex = -1;
+  initGame();
+  paused = false;
+  ui.instructionsOverlay.hidden = false;
+  ui.resultOverlay.hidden = true;
+  ui.pauseOverlay.hidden = true;
+  ui.gameHud.hidden = true;
+  ui.pauseBtn.hidden = true;
+  ui.instructionsPlayBtn.focus({ preventScroll: true });
+}
+
+function setPaused(value) {
+  if (!instructionsDismissed || gameOver) return;
+  paused = value;
+  handlePointerCancel();
+  lastTime = 0;
+  ui.pauseOverlay.hidden = !value;
+  if (value) ui.resumeBtn.focus({ preventScroll: true });
+  else canvas.focus({ preventScroll: true });
+}
+
 function gameLoop(timestamp) {
-  const dt = lastTime ? timestamp - lastTime : 16;
+  const dt = Math.min(lastTime ? timestamp - lastTime : 16, 50);
   lastTime = timestamp;
-
-  updatePhysics(dt);
-  render();
-
+  if (instructionsDismissed && !paused && !gameOver && !document.hidden) {
+    gameTime += dt;
+    updatePhysics(dt);
+  }
+  if (!document.hidden) render();
   animationId = requestAnimationFrame(gameLoop);
 }
 
 function handleResize() {
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = window.innerWidth;
   const h = window.innerHeight;
-
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.scale(dpr, dpr);
-
-  const aspect = w / h;
-  const minAspect = 0.85;
-  WORLD_WIDTH = Math.max(WORLD_HEIGHT * aspect, WORLD_HEIGHT * minAspect);
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const view = getViewMetrics();
+  WORLD_WIDTH = view.width / view.scale;
+  cameraX = Math.max(0, figure.x - WORLD_WIDTH * 0.35);
 }
 
 let instructionsDismissed = false;
 
-function setupInput() {
-  canvas.addEventListener('pointerdown', handlePointerDown, {
-    passive: false,
-  });
-  canvas.addEventListener('pointerup', handlePointerUp, { passive: false });
-  canvas.addEventListener('pointercancel', handlePointerCancel, {
-    passive: false,
-  });
-  canvas.addEventListener('pointerleave', handlePointerCancel);
+function updateSoundButton() {
+  ui.soundBtn.classList.toggle('muted', soundMuted);
+  ui.soundBtn.setAttribute('aria-pressed', String(soundMuted));
+  ui.soundBtn.setAttribute('aria-label', soundMuted ? 'Unmute sound' : 'Mute sound');
+  ui.soundBtn.title = soundMuted ? 'Unmute sound' : 'Mute sound';
+}
 
-  canvas.addEventListener('click', (e) => {
-    if (gameOver) {
-      unlockAudio();
-      initGame();
+function setupInput() {
+  canvas.addEventListener('pointerdown', handlePointerDown, { passive: false });
+  canvas.addEventListener('pointerup', handlePointerUp, { passive: false });
+  canvas.addEventListener('pointercancel', handlePointerCancel);
+  canvas.addEventListener('lostpointercapture', () => { if (activePointerId !== null) handlePointerCancel(); });
+  ui.instructionsPlayBtn.addEventListener('click', startRun);
+  ui.retryBtn.addEventListener('click', startRun);
+  ui.pauseBtn.addEventListener('click', () => setPaused(true));
+  ui.resumeBtn.addEventListener('click', () => setPaused(false));
+  for (const id of ['homeBtn', 'resultHomeBtn', 'pauseHomeBtn']) {
+    document.getElementById(id).addEventListener('click', e => { e.preventDefault(); goHome(); });
+  }
+  ui.soundBtn.addEventListener('click', () => {
+    soundMuted = !soundMuted;
+    try { localStorage.setItem('slipland_muted', String(soundMuted)); } catch (_) {}
+    updateSoundButton();
+    if (!soundMuted) { unlockAudio(); initAudio(); }
+  });
+  updateSoundButton();
+
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Tab') {
+      const dialog = !ui.pauseOverlay.hidden ? ui.pauseOverlay : !ui.resultOverlay.hidden ? ui.resultOverlay : null;
+      if (dialog) {
+        const buttons = [...dialog.querySelectorAll('button')];
+        const first = buttons[0], last = buttons[buttons.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+      return;
+    }
+    if (e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.code === 'Escape' && instructionsDismissed && !gameOver) { e.preventDefault(); setPaused(!paused); return; }
+    if (e.target.closest?.('button, a, input, textarea')) return;
+    if (e.code === 'Enter' && gameOver) { e.preventDefault(); startRun(); return; }
+    if (e.code === 'Space' && instructionsDismissed && !paused && !gameOver) {
+      e.preventDefault();
+      if (activePointerId === null) keyboardCharging = beginCharge();
     }
   });
-
-  const playBtn = document.getElementById('instructionsPlayBtn');
-  const overlay = document.getElementById('instructionsOverlay');
-  if (playBtn && overlay) {
-    playBtn.addEventListener('click', () => {
-      overlay.classList.add('hidden');
-      instructionsDismissed = true;
-      unlockAudio();
-    });
-  }
+  document.addEventListener('keyup', e => {
+    if (e.code !== 'Space' || !keyboardCharging) return;
+    e.preventDefault();
+    keyboardCharging = false;
+    releaseJump();
+  });
+  window.addEventListener('blur', () => setPaused(true));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
 }
-
-function updatePlayOverlay() {
-  const overlay = document.getElementById('playOverlay');
-  if (!overlay) return;
-  const isMobile = window.innerWidth < 768 || 'ontouchstart' in window;
-  const isPortrait = window.innerHeight > window.innerWidth;
-  if (!isMobile || !isPortrait) {
-    overlay.classList.add('hidden');
-    return;
-  }
-  overlay.classList.remove('hidden');
-}
-
-function setupPlayOverlay() {
-  updatePlayOverlay();
-}
-
 
 function fetchWorldRecord() {
   if (FIREBASE_DB_URL) {
@@ -968,7 +974,7 @@ function submitWorldRecord(score) {
 function loadRecords() {
   try {
     const p = parseInt(localStorage.getItem('slipland_personal'), 10);
-    if (!isNaN(p)) personalRecord = p;
+    if (Number.isFinite(p) && p >= 0) personalRecord = p;
   } catch (_) {}
   fetchWorldRecord();
   if (FIREBASE_DB_URL) {
@@ -981,12 +987,9 @@ function loadRecords() {
 function start() {
   loadRecords();
   handleResize();
-  window.addEventListener('resize', () => {
-    handleResize();
-    updatePlayOverlay();
-  });
-  setupPlayOverlay();
+  window.addEventListener('resize', handleResize);
   setupInput();
+  canvas.tabIndex = -1;
   initGame();
   lastTime = 0;
   requestAnimationFrame(gameLoop);

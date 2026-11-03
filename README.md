@@ -9,7 +9,11 @@ A one-direction jumping game where surface friction determines your fate. Hop fr
 - **Materials**: Six platform materials (ice, wood, rubber, metal, sandpaper, plastic), each with distinct friction ranges and visual cues
 - **Surface friction**: Low-friction surfaces (ice, metal) cause more sliding; high-friction (rubber, sandpaper) are forgiving
 - **Tactile feedback**: Landing triggers wobble/skid visuals, sound cues (grip, scrape, slip), and haptic vibration on mobile
-- **Interaction states**: Figure color indicates stability—teal (stable), orange (incipient slip), red (sliding)
+- **Jump feedback**: A dotted trajectory and charge meter preview the jump; the surface indicator shows sliding, settled, and teetering states
+- **Illustrated world**: Paper tones, pencil clouds, rolling hills, and textured platforms keep the game and title screen in one scene
+- **Endless course**: New platforms generate ahead, with a consistent wooden first landing to learn the controls
+- **Pause and sound controls**: Pause with Escape, automatically pause on tab changes, and remember your sound preference
+- **Responsive play**: Portrait and landscape layouts preserve the jump arc and show the next platform
 - **Streak**: Consecutive safe landings (low horizontal speed) build a streak shown in the HUD
 - **Game over**: Falling off a platform, sliding past its edges, or missing the next land ends the game
 
@@ -26,22 +30,27 @@ A one-direction jumping game where surface friction determines your fate. Hop fr
 
 ## How to Run
 
-**Option 1: Open directly**
+**Start a local server** (needed for the JavaScript module and audio assets):
 ```bash
-open index.html
+python3 -m http.server 4173
 ```
-Or double-click `index.html` in your file browser.
-
-**Option 2: Local server** (recommended for mobile testing)
-```bash
-npx serve .
-```
-Then open the shown URL in your browser. On a phone, use your computer's local IP (e.g. `http://192.168.1.x:3000`) to test touch controls and vibration.
+Then open `http://localhost:4173` in your browser. On a phone, use your computer's local IP (e.g. `http://192.168.1.x:3000`) to test touch controls and vibration.
 
 ## Controls
 
-- **Tap / click**: Press and hold to charge jump, release to jump
-- **Restart**: Tap anywhere after game over
+- **Space / touch / mouse**: Hold to charge, release to jump
+- **Edge save**: Tap quickly when the goose teeters
+- **Pause / resume**: Press Escape or use the pause button
+- **Restart**: Select “try again” or press Enter on the result screen
+- **Sound**: Toggle the speaker button; the preference is saved locally
+
+## Verification
+
+Run the gameplay regression checks with Node.js (no dependencies):
+```bash
+node --test tests/game.test.cjs
+```
+The checks cover opening jumps, edge saves, keyboard/pointer input, pause timing, course extension, record preservation, and viewport scaling.
 
 ## Sound Effects
 
@@ -80,6 +89,6 @@ To track visits and gameplay:
 3. Name it (e.g. "Slipland"), pick timezone and currency → **Create**
 4. Choose **Web** as the platform, enter `https://rhzhang-ustc.github.io/slipland` as the URL
 5. Copy your **Measurement ID** (starts with `G-`)
-6. In `index.html`, replace both `G-XXXXXXXXXX` with your Measurement ID
+6. In `index.html`, replace both occurrences of the current `G-F03VWL0JJN` with your Measurement ID
 
 You’ll see page views in GA. Custom events (`game_start`, `game_over` with score) appear under **Reports → Engagement → Events** after a day or two.

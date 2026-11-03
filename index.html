@@ -2,70 +2,65 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="description" content="Hop across platforms with physics-driven friction. Ice slides, rubber grips—land right or slip off. Tap to save when you teeter on the edge.">
-  <title>Slipland</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#eeeadd">
+  <meta name="description" content="A little hop. A lot of slip. Guide a very determined goose across six unpredictable surfaces in this one-button physics game.">
+  <title>Slipland — a game of friction</title>
+  <link rel="icon" type="image/png" href="images/goose.png">
   <link rel="stylesheet" href="style.css">
-  <!-- Google Analytics: replace G-XXXXXXXXXX with your Measurement ID from analytics.google.com -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-F03VWL0JJN"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'G-XXXXXXXXXX');
+    gtag('config', 'G-F03VWL0JJN');
   </script>
 </head>
-<body>
-  <div id="instructionsOverlay">
-    <div class="instructions-stars" aria-hidden="true"></div>
-    <div id="instructionsModal">
-      <div class="instructions-title-banner">
-        <h1>SLIPLAND: Master the Friction!</h1>
-      </div>
-      <div class="instructions-platforms">
-        <div class="platform-card platform-start">
-          <div class="platform-bar"></div>
-          <span class="platform-label">START</span>
-          <p class="platform-desc">Hold &amp; Release to Jump!</p>
-        </div>
-        <div class="platform-card platform-ice">
-          <div class="platform-bar"></div>
-          <span class="platform-label">ICE</span>
-          <p class="platform-desc">LOW FRICTION!<br><small>(Slide-Off Risk)</small></p>
-        </div>
-        <div class="platform-card platform-wood">
-          <div class="platform-bar"></div>
-          <span class="platform-label">WOOD</span>
-          <p class="platform-desc">MEDIUM FRICTION</p>
-        </div>
-        <div class="platform-card platform-sandpaper">
-          <div class="platform-bar"></div>
-          <span class="platform-label">SANDPAPER</span>
-          <p class="platform-desc">HIGH FRICTION!<br><small>(Stick Fast)</small></p>
-        </div>
-        <div class="platform-card platform-teeter">
-          <div class="platform-bar platform-edge"></div>
-          <span class="platform-label">TEETER!</span>
-          <p class="platform-desc"><strong>Tap to save yourself!</strong></p>
-        </div>
-        <div class="platform-card platform-plastic">
-          <div class="platform-bar"></div>
-          <span class="platform-label">PLASTIC</span>
-          <p class="platform-desc">VARIED</p>
-        </div>
-      </div>
-      <button id="instructionsPlayBtn">Play</button>
-    </div>
+<body class="at-home">
+  <canvas id="gameCanvas" tabindex="0" aria-label="Slipland game. Hold Space or press and hold to charge. Release to jump. Press Escape to pause."></canvas>
+
+  <header class="site-header">
+    <a class="wordmark" href="#" id="homeBtn" aria-label="Slipland home">slipland<span class="wordmark-dot">.</span></a>
+    <span class="header-note">a game of friction</span>
+    <nav class="game-actions" aria-label="Game controls">
+      <button class="icon-button" id="soundBtn" aria-label="Mute sound" aria-pressed="false" title="Mute sound"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="sound-waves" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="sound-off" d="m16 9 6 6m0-6-6 6"/></svg></button>
+      <button class="icon-button" id="pauseBtn" aria-label="Pause game" title="Pause (Esc)" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button>
+    </nav>
+  </header>
+
+  <main id="instructionsOverlay" class="home-screen">
+    <section class="start-menu" aria-labelledby="gameTitle">
+      <h1 id="gameTitle">slipland<span>.</span></h1>
+      <p class="intro">One goose. A very slippery situation.</p>
+      <button id="instructionsPlayBtn" class="primary-button">play <span aria-hidden="true">▸</span></button>
+      <p class="control-hint">hold <kbd>SPACE</kbd> or the screen<br>release to jump</p>
+    </section>
+    <div class="field-note" aria-hidden="true">this is you <svg viewBox="0 0 80 65"><path d="M4 4Q63 2 62 53m-10-9 10 12 11-11"/></svg></div>
+    <footer class="surface-guide" aria-label="Surface friction guide">
+      <span class="guide-label">THE GROUND RULES</span>
+      <div class="material-key"><i class="swatch-ice"></i><span>ice</span></div>
+      <div class="material-key"><i class="swatch-metal"></i><span>metal</span></div>
+      <span class="grip-arrow" aria-label="Increasing grip">less grip <span>⟶</span> more grip</span>
+      <div class="material-key"><i class="swatch-wood"></i><span>wood</span></div>
+      <div class="material-key"><i class="swatch-plastic"></i><span>plastic</span></div>
+      <div class="material-key"><i class="swatch-rubber"></i><span>rubber</span></div>
+      <div class="material-key"><i class="swatch-sandpaper"></i><span>sandpaper</span></div>
+    </footer>
+  </main>
+
+  <div id="gameHud" hidden>
+    <div class="scoreboard"><div class="score-main"><span class="eyebrow">LANDS</span><strong id="scoreValue">00</strong></div><div class="score-record"><span>BEST RUN</span><strong id="bestValue">00</strong><span id="streakValue"></span></div></div>
+    <div id="surfaceStatus" class="surface-status"><span class="status-dot"></span><span id="surfaceValue">Start · steady ground</span></div>
+    <div class="jump-control"><div class="charge-heading"><span id="chargeLabel">hold to charge</span><span id="chargeValue">0%</span></div><div class="charge-track"><div id="chargeFill"></div></div><p id="playHint"><kbd>SPACE</kbd> or hold anywhere · release to jump</p></div>
+    <div class="game-caption">on the edge? tap to save yourself.</div>
   </div>
-  <div id="playOverlay" class="hidden">
-    <div id="rotateMessage">
-      <div id="rotateIcon">📱</div>
-      <p>Rotate your phone to play</p>
-    </div>
-  </div>
-  <canvas id="gameCanvas"></canvas>
+
+  <section id="resultOverlay" class="dialog-backdrop" hidden aria-labelledby="resultTitle" role="dialog" aria-modal="true">
+    <div class="dialog-card"><span class="eyebrow" id="resultEyebrow">OOPS.</span><h2 id="resultTitle">Slipped away.</h2><p id="resultMessage">A little less speed next time?</p><div class="result-stats"><div><strong id="resultScore">0</strong><span>LANDS</span></div><div><strong id="resultBest">0</strong><span>BEST RUN</span></div></div><button class="primary-button" id="retryBtn">try again <span aria-hidden="true">↻</span></button><button class="text-button" id="resultHomeBtn">back to the start</button><span class="dialog-tip">Press Enter to try again</span></div>
+  </section>
+  <section id="pauseOverlay" class="dialog-backdrop" hidden aria-labelledby="pauseTitle" role="dialog" aria-modal="true">
+    <div class="dialog-card"><span class="eyebrow">PAUSED</span><h2 id="pauseTitle">Taking a breather.</h2><p>Your goose isn’t going anywhere.</p><button class="primary-button" id="resumeBtn">keep going <span aria-hidden="true">▸</span></button><button class="text-button" id="pauseHomeBtn">back to the start</button><span class="dialog-tip">Space to charge · release to jump · Esc to pause</span></div>
+  </section>
   <script type="module" src="game.js"></script>
 </body>
 </html>
